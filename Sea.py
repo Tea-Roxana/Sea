@@ -87,8 +87,7 @@ def place_ships():
 def save_ships(entries, n_page):
     global board_p, board_ai, letters
     board_numeric = [[0]*10 for _ in range(10)]
-    # Размещаем только корабли из заполненных полей
-    for size, entry_list in entries.items():
+    for size, entry_list in entries.items():# корабли из заполненных полей
         for entry in entry_list:
             coordinates = entry.get().strip()
             if coordinates:
@@ -103,7 +102,7 @@ def save_ships(entries, n_page):
                         
                     if not (0 <= start_x < 10 and 0 <= start_y < 10):  continue
                       
-                    can_place = True# Проверяем можно ли разместить корабль (как у ИИ)
+                    can_place = True
                     for i in range(size):
                         if direction == 'г':
                             x = start_x
@@ -116,7 +115,7 @@ def save_ships(entries, n_page):
                             can_place = False
                             break
                             
-                        for dx in [-1, 0, 1]:   # Проверяем соседей
+                        for dx in [-1, 0, 1]:
                             for dy in [-1, 0, 1]:
                                 nx, ny = x + dx, y + dy
                                 if 0 <= nx < 10 and 0 <= ny < 10:
@@ -126,7 +125,7 @@ def save_ships(entries, n_page):
                             if not can_place:break
                         if not can_place:break
                     
-                    if can_place:# Размещаем корабль
+                    if can_place:
                         for i in range(size):
                             if direction == 'г':
                                 x = start_x
@@ -440,4 +439,5 @@ set_board()
 btn_ship = Button(root, text="Разместить корабли", font=("Arial", 10), command=place_ships)
 btn_ship.pack(padx=10, pady=20, anchor="e")       
 root.mainloop()
+
 
