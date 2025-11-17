@@ -84,10 +84,10 @@ def place_ships():
     n_page.grab_set()  #пока не закрою окно, не смогу взаимодействовать с главным
 
 
-def save_ships(entries, n_page, btn):
+def save_ships(entries, n_page):
     global board_p, board_ai, letters
     board_numeric = [[0]*10 for _ in range(10)]
-    
+    # Размещаем только корабли из заполненных полей
     for size, entry_list in entries.items():
         for entry in entry_list:
             coordinates = entry.get().strip()
@@ -99,74 +99,88 @@ def save_ships(entries, n_page, btn):
                         start_x = letters.index(coords_list[0].upper()) 
                         start_y = int(coords_list[1]) - 1
                         direction = coords_list[2].lower()
-                    else:return False
+                    else: continue
                         
-                    if not (0 <= start_x < 10 and 0 <= start_y < 10):return False
-                    
+                    if not (0 <= start_x < 10 and 0 <= start_y < 10):  continue
+                      
+                    can_place = True# Проверяем можно ли разместить корабль (как у ИИ)
                     for i in range(size):
-                        if direction == 'г':  #горизонтально
+                        if direction == 'г':
                             x = start_x
                             y = start_y + i
-                        else:  #вертикально
+                        else:
                             x = start_x + i
                             y = start_y
-                        if not (0 <= x < 10 and 0 <= y < 10):return False
-
-                        if board_numeric[x][y] == 1:return False
-                        board_numeric[x][y] = 1
                         
-                except ValueError:
-                    print("Ошибка в формате координат")
-                    return False
-    
-    if check_placement(board_numeric):
+                        if not (0 <= x < 10 and 0 <= y < 10):
+                            can_place = False
+                            break
+                            
+                        for dx in [-1, 0, 1]:   # Проверяем соседей
+                            for dy in [-1, 0, 1]:
+                                nx, ny = x + dx, y + dy
+                                if 0 <= nx < 10 and 0 <= ny < 10:
+                                    if board_numeric[nx][ny] == 1:
+                                        can_place = False
+                                        break
+                            if not can_place:break
+                        if not can_place:break
+                    
+                    if can_place:# Размещаем корабль
+                        for i in range(size):
+                            if direction == 'г':
+                                x = start_x
+                                y = start_y + i
+                            else:
+                                x = start_x + i
+                                y = start_y
+                            board_numeric[x][y] = 1
+                except ValueError:continue
+
+    if check_placement_partial(board_numeric):
         board_p = board_numeric
         for i in range(10):
             for j in range(10):
                 if board_numeric[i][j] == 1:
                     buttons_p[i][j].config(bg='#639799')
-        global board_ai
         board_ai = generate_ai_ships()
         n_page.grab_release() 
         n_page.destroy()
-        btn.destroy()
         return True
     else:
         messagebox.showerror("Ошибка", "Некорректная расстановка кораблей!")
         return False
                  
-def check_placement(board):
-    line = [[0] * 12]  #верхняя граница
-    ship = [0, 0, 0, 0]
-    for row in board:
-        line.append([0] + row + [0])  #границы слева и справа
-    line.append([0] * 12)  #нижняя граница
+def check_placement_partial(board):
+    temp_board = [row[:] for row in board]
+    for i in range(10):
+        for j in range(10):
+            if temp_board[i][j] == 1:
+                for dx, dy in [(-1,-1), (-1,1), (1,-1), (1,1)]:
+                    nx, ny = i + dx, j + dy
+                    if 0 <= nx < 10 and 0 <= ny < 10:
+                        if temp_board[nx][ny] == 1: return False
     
-    for j in range(1, len(line) - 1):  #от 1 до 10 (исключаем границы)
-        for i in range(1, len(line[j]) - 1):  #от 1 до 10
-            if line[j][i] != 0:
-                if line[j+1][i+1] != 0 or line[j+1][i-1] != 0 or line[j-1][i+1] != 0 or line[j-1][i-1] != 0:
-                    return False
-                
-                if line[j][i+1] != 0:
-                    line[j][i+1] += line[j][i]
-                if line[j+1][i] != 0:
-                    line[j+1][i] += line[j][i]
-    
-    for j in range(1, len(line) - 1): 
-        for i in range(1, len(line[j]) - 1):
-            cell_value = line[j][i]
-            if cell_value == 1:
-                ship[0] += 1  # 1-палубный
-            elif cell_value == 2:
-                ship[1] += 1  # 2-палубный
-            elif cell_value == 3:
-                ship[2] += 1  # 3-палубный
-            elif cell_value == 4:
-                ship[3] += 1  # 4-палубный
-    
-    if ship[0] != 10 or ship[1] != 6 or ship[2] != 3 or ship[3] != 1:
-        return False
+    visited = set()
+    for i in range(10):
+        for j in range(10):
+            if temp_board[i][j] == 1 and (i, j) not in visited:
+                ship_cells = []
+                stack = [(i, j)]
+                while stack:
+                    x, y = stack.pop()
+                    if (x, y) not in visited and temp_board[x][y] == 1:
+                        visited.add((x, y))
+                        ship_cells.append((x, y))
+                        for dx, dy in [(0,1), (1,0), (0,-1), (-1,0)]:
+                            nx, ny = x + dx, y + dy
+                            if 0 <= nx < 10 and 0 <= ny < 10:stack.append((nx, ny))
+                                
+                if len(ship_cells) > 1:
+                    rows = set(x for x, y in ship_cells)
+                    cols = set(y for x, y in ship_cells)
+                    if len(rows) > 1 and len(cols) > 1:return False
+                if len(ship_cells) > 4:return False
     return True
 
 
@@ -426,3 +440,4 @@ set_board()
 btn_ship = Button(root, text="Разместить корабли", font=("Arial", 10), command=place_ships)
 btn_ship.pack(padx=10, pady=20, anchor="e")       
 root.mainloop()
+
