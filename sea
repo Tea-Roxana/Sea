@@ -97,7 +97,8 @@ def save_ships(entries, n_page):
     for size, entry_list in entries.items():
         for entry in entry_list:
             coordinates = entry.get().strip()
-            if coordinates: coords_list = coordinates.split()
+            if coordinates: 
+                coords_list = coordinates.split()
                 try:
                     if len(coords_list) >= 3:
                         start_x = letters.index(coords_list[0].upper()) 
@@ -574,3 +575,4 @@ btn_ship = Button(root, text="Разместить корабли", font=("Arial
 btn_ship.pack(padx=10, pady=20, anchor="e")       
 
 root.mainloop()
+
