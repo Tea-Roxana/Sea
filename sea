@@ -122,26 +122,37 @@ def save_ships(entries, n_page):
                 except ValueError:
                     continue
 
-    # Удаляем ТОЛЬКО те корабли, которые заменяем новыми из entry
+    # Для многопалубных кораблей удаляем по одному кораблю такого же размера
+    # Для однопалубных удаляем конкретный корабль в тех же координатах
+    removed_cells = set()  # Отслеживаем удаленные клетки
+    
     for ship in ships_to_place:
         size = ship['size']
         start_x = ship['start_x']
         start_y = ship['start_y']
         
-        # Ищем корабль который будет заменен (по размеру и координатам)
-        ship_to_remove = None
-        for existing_ship in existing_ships_info:
-            if existing_ship['size'] == size:
-                # Проверяем пересекается ли новый корабль со старым
-                if do_ships_overlap(existing_ship, start_x, start_y, size, ship['direction']):
-                    ship_to_remove = existing_ship
-                    break
-        
-        # Если нашли корабль для замены - удаляем его
-        if ship_to_remove:
-            for x, y in ship_to_remove['cells']:
-                board_numeric[x][y] = 0
-            existing_ships_info.remove(ship_to_remove)
+        if size == 1:
+            # Для однопалубных: удаляем корабль в этих же координатах (если есть)
+            if board_numeric[start_x][start_y] == 1:
+                board_numeric[start_x][start_y] = 0
+                removed_cells.add((start_x, start_y))
+        else:
+            # Для многопалубных: ищем корабль такого же размера для удаления
+            ship_to_remove = None
+            for existing_ship in existing_ships_info:
+                if existing_ship['size'] == size:
+                    # Проверяем не удаляли ли уже клетки этого корабля
+                    cells_still_exist = any(board_numeric[x][y] == 1 for x, y in existing_ship['cells'])
+                    if cells_still_exist:
+                        ship_to_remove = existing_ship
+                        break
+            
+            # Удаляем найденный корабль
+            if ship_to_remove:
+                for x, y in ship_to_remove['cells']:
+                    board_numeric[x][y] = 0
+                    removed_cells.add((x, y))
+                existing_ships_info.remove(ship_to_remove)
 
     # Размещаем новые корабли из entry
     for ship in ships_to_place:
@@ -252,22 +263,6 @@ def do_ships_overlap(existing_ship, new_start_x, new_start_y, new_size, new_dire
         if existing_cell in new_cells:
             return True
     
-    return False
-
-# Остальные функции остаются без изменений
-def find_existing_ships(board):
-    """Находит размеры кораблей на поле"""
-    ships_info = get_ships_detailed(board)
-    return [ship['size'] for ship in ships_info]
-
-def remove_ship_of_size(board, target_size):
-    """Удаляет первый найденный корабль заданного размера"""
-    ships_info = get_ships_detailed(board)
-    for ship in ships_info:
-        if ship['size'] == target_size:
-            for x, y in ship['cells']:
-                board[x][y] = 0
-            return True
     return False
 
 
@@ -472,8 +467,6 @@ def remove_hits(ship_hits, board, buttons, player_turn):
         else:
             if len(ship_hits) in player_ships:
                 player_ships.remove(len(ship_hits))
-
-        if check_winner(player_turn):return True
             
         for hit in ship_hits:
             row, col = hit[0], hit[1]
@@ -484,13 +477,13 @@ def remove_hits(ship_hits, board, buttons, player_turn):
                     if 0 <= r < 10 and 0 <= c < 10 and board[r][c] == 0:
                         cells_to_mark.add((r, c))
 
-        for r, c in cells_to_mark:  #отмечаем клетки как промахи
+        for r, c in cells_to_mark:
             board[r][c] = -1
             if player_turn == "player":
-                buttons[r][c].config(bg='white', text='•')  #поле ИИ
+                buttons[r][c].config(bg='white', text='•')
                 player_moves.append((r, c))
             else:
-                buttons[r][c].config(bg='light gray', text='•')  #поле игрока
+                buttons[r][c].config(bg='light gray', text='•')
                 if (r, c) in ai_possible_moves:
                     ai_possible_moves.remove((r, c))
         
@@ -500,18 +493,26 @@ def remove_hits(ship_hits, board, buttons, player_turn):
 
 def check_winner(turn):
     global ships, player_ships
-    new_game = False
-    if turn == "player" and not player_ships:
-        messagebox.showinfo("Конец игры", "Победил Игрок!") 
-        new_game = True
-    elif turn == "ai" and not ships:
-        messagebox.showinfo("Конец игры", "Победил Компьютер!")
-        new_game = True
-    if new_game:
-        result = messagebox.askyesno("Новая игра", "Начать заново?")
-        if result:
-            restart()
-        return True
+    
+    # Проверяем остались ли живые корабли на поле противника
+    if turn == "player":
+        # Проверяем есть ли еще неподбитые корабли у ИИ
+        ai_ships_remaining = any(cell == 1 for row in board_ai for cell in row)
+        if not ai_ships_remaining:
+            messagebox.showinfo("Конец игры", "Победил Игрок!") 
+            if messagebox.askyesno("Новая игра", "Начать заново?"):
+                restart()
+            return True
+            
+    elif turn == "ai":
+        # Проверяем есть ли еще неподбитые корабли у игрока
+        player_ships_remaining = any(cell == 1 for row in board_p for cell in row)
+        if not player_ships_remaining:
+            messagebox.showinfo("Конец игры", "Победил Компьютер!")
+            if messagebox.askyesno("Новая игра", "Начать заново?"):
+                restart()
+            return True
+    
     return False
 
 
@@ -530,7 +531,6 @@ def restart():
     set_board()
     
 
-
 def make_move(row, col):
     global player_turn, last_hit, last_hit_player, player_moves
     if not ships or not player_ships:return
@@ -545,7 +545,11 @@ def make_move(row, col):
             if remove_hits(last_hit_player, board_ai, buttons_ai, player_turn):
                 last_hit_player = []
             player_moves.append((row, col))
+            
+            # ДОБАВИТЬ ПРОВЕРКУ ПОБЕДЫ ПОСЛЕ ПОПАДАНИЯ
+            check_winner("player")
             return
+            
         else:  #промах
             buttons_ai[row][col].config(bg='white', text='•')
             board_ai[row][col] = -1
@@ -564,6 +568,10 @@ def make_move(row, col):
                 if remove_hits(last_hit, board_p, buttons_p, "ai"):
                     last_hit = []
                 ai_hit = True
+                
+                # ДОБАВИТЬ ПРОВЕРКУ ПОБЕДЫ ПОСЛЕ ПОПАДАНИЯ ИИ
+                check_winner("ai")
+                
             else:  #промах
                 buttons_p[row_ai][col_ai].config(bg='white', text='•')
                 board_p[row_ai][col_ai] = -1
